@@ -29,4 +29,5 @@ This code is tested in Ubuntu 18.04.
 First the dependent Python libraries should be installed by typing `pip3 install -r requirements.txt` in a terminal.
 Then start a clean (delete all model data via the `-d` argument if you want) experiment by typing `python3 ea.py -d`.
 After a while, the number of founded bugs can be seen via TensorBoard (`tensorboard --logdir ~/model/wuji`).
+
 ![](img/blockmaze.png)
