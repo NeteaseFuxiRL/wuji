@@ -21,7 +21,7 @@ Detailed information can be found in:
 * algorithm implementation: Ruimin Shen
 * game environment (block maze): Yan Zheng
 * experiment: Yan Zheng and Ruimin Shen
-* paper writing: Yan Zheng et al.
+* paper writing: Yan Zheng and Xiaofei Xie et al.
 
 # How to Use
 
