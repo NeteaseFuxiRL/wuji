@@ -1,0 +1,10 @@
+conv.0.conv.weight	9dadcf6b7e40d7d63016cfc7d4c8d4d7
+conv.0.conv.bias	f09f35a5637839458e462e6350ecbce4
+conv.1.conv.weight	00fe89ef3705d5c3db581f9b2f76d8fc
+conv.1.conv.bias	348a9791dc41b89796ec3808b5b5262f
+conv.2.conv.weight	56701e828a7582d6e32acc04d4f51405
+conv.2.conv.bias	f09f35a5637839458e462e6350ecbce4
+linear.0.linear.weight	5596186737e66d868279d5fd4ec74cd3
+linear.0.linear.bias	c99a74c555371a433d121f551d6c6398
+linear.1.linear.weight	f1bd5c535e7a4b2cb4c927e8c6019881
+linear.1.linear.bias	1681ffc6e046c7af98c9e6c232a3fe0a
