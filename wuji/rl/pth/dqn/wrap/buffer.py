@@ -16,11 +16,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
 import os
-import inspect
 import random
 import collections
-
-import numpy as np
 
 NAME = os.path.basename(os.path.dirname(os.path.dirname(__file__)))
 
@@ -34,19 +31,4 @@ def fifo(rl):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
             self.buffer = Buffer(maxlen=self.config.getint(NAME, 'capacity'))
-    return RL
-
-
-def diverse(rl):
-    from ..buffer import Diverse as Buffer
-    name = inspect.getframeinfo(inspect.currentframe()).function
-
-    class RL(rl):
-        def __init__(self, *args, **kwargs):
-            super().__init__(*args, **kwargs)
-            choose = self.config.getint('_'.join([NAME, name]), 'choose')
-            space = np.insert(self.problem.context['state_space'], -1, [0, self.problem.context['encoding']['blob']['init'][self.kind]['kwargs']['outputs'] - 1], axis=0)
-            lower, upper = np.moveaxis(space, -1, 0)
-            range = upper - lower + np.finfo(space.dtype).eps
-            self.buffer = Buffer(self.config.getint(NAME, 'capacity'), choose, lower, range)
     return RL
