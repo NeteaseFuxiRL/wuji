@@ -15,14 +15,6 @@ Detailed information can be found in:
 }
 ```
 
-# Main Contributors of This Paper
-
-* core idea: Ruimin Shen
-* algorithm implementation: Ruimin Shen
-* game environment (block maze): Yan Zheng
-* experiment: Yan Zheng and Ruimin Shen
-* paper writing: Yan Zheng and Xiaofei Xie et al.
-
 # How to Use
 
 This code is tested in Ubuntu 18.04.
