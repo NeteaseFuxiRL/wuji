@@ -15,22 +15,28 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
-from wuji.rl.pth import wrap as wrap_rl, pg
-from .. import Evaluator as _Evaluator, wrap as _wrap
+import os
+import inspect
 
 
-@wrap_rl.model
-@wrap_rl.problem
-@_wrap.evaluate
-class Evaluator(_Evaluator):
-    @staticmethod
-    def ray_resources(config):
-        return dict(num_cpus=1)
+def rollout(rl):
+    name = '_'.join([
+        os.path.basename(os.path.splitext(__file__)[0]),
+        inspect.getframeinfo(inspect.currentframe()).function,
+    ])
 
-    def __init__(self, config, **kwargs):
-        self.config = config
-        self.kwargs = kwargs
+    class RL(rl):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            assert not hasattr(self, name)
 
-    def update_context(self, context):
-        context['encoding']['blob']['module'] = self.config.get('model', 'module').split() + self.config.get('model', 'init').split()
-        context['encoding']['blob']['agent'] = dict(eval=['.'.join([pg.agent.__name__, 'Eval'])])
+        def __call__(self, *args, **kwargs):
+            setattr(self, name, [])
+            return super().__call__(*args, **kwargs)
+
+        def rollout(self):
+            attr = getattr(self, name)
+            ret = super().rollout()
+            attr.append(ret)
+            return ret
+    return RL

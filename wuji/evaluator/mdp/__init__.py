@@ -28,13 +28,11 @@ class RL(Evaluator):
 
     def __getstate__(self):
         state = super().__getstate__()
-        if hasattr(self.rl, '__getstate__'):
-            state.update(self.rl.__getstate__())
+        state.update(self.rl.__getstate__())
         return state
 
     def __setstate__(self, state):
-        if hasattr(self.rl, '__setstate__'):
-            self.rl.__setstate__(state)
+        self.rl.__setstate__(state)
         return super().__setstate__(state)
 
     def __len__(self):

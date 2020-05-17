@@ -56,19 +56,28 @@ def test():
     config = configparser.ConfigParser()
     config.read(PREFIX + '.ini')
     wuji.random.seed(0)
-    rl = functools.reduce(lambda x, wrap: wrap(x), itertools.chain((RL,), map(wuji.parse.instance, filter(None, config.get('rl', 'wrap').split('\t') + config.get('dqn', 'wrap').split('\t')))))
+    rl = functools.reduce(lambda x, wrap: wrap(x), itertools.chain((RL,), map(wuji.parse.instance, filter(None, config.get('rl', 'wrap').split('\t') + config.get(NAME, 'wrap').split('\t')))))
     rl = pg.wrap.hook.rollout(rl)
     with contextlib.closing(rl(config)) as rl:
         rl.problem.seed(0)
         check_text('model', '\n'.join(['\t'.join([key, hashlib.md5(value.numpy().tostring()).hexdigest()]) for key, value in rl.get_blob().items()]))
         outcome = rl()
-        (trajectory,), (result,) = zip(*rl.hook_rollout)
+        (trajectory,), (terminal,), (result,) = zip(*rl.hook_rollout)
         # trajectory
         check_text(os.path.join('trajectory', 'state'), '\n'.join([hashlib.md5(exp['inputs'][0].detach().numpy().tostring()).hexdigest() for exp in trajectory]))
+        check_text(os.path.join('trajectory', 'prob'), '\n'.join(['\t'.join(map(str, exp['prob'].detach().numpy().flat)) for exp in trajectory]))
         check_text(os.path.join('trajectory', 'action'), '\n'.join([str(exp['action'].item()) for exp in trajectory]))
         check_text(os.path.join('trajectory', 'reward'), '\n'.join([str(exp['reward'].item()) for exp in trajectory]))
+        check_text(os.path.join('trajectory', 'terminal'), str(terminal.item()))
         # tensors
-        q_label = rl.get_q_label(trajectory)
-        check_text(os.path.join('tensors', 'q_label'), array2tsv(q_label.numpy()))
+        with torch.no_grad():
+            logits, prob, baseline, action, value = rl.get_tensors(trajectory, terminal)
+        check_text(os.path.join('tensors', 'logits'), array2tsv(logits.numpy()))
+        check_text(os.path.join('tensors', 'prob'), array2tsv(prob.numpy()))
+        check_text(os.path.join('tensors', 'baseline'), array2tsv(baseline.numpy()))
+        check_text(os.path.join('tensors', 'action'), array2tsv(action.numpy()))
+        check_text(os.path.join('tensors', 'value'), array2tsv(value.numpy()))
         # loss
+        for key, value in outcome.losses._asdict().items():
+            check_text(os.path.join('loss', key), str(value.item()))
         check_text('loss', str(outcome.loss.item()))

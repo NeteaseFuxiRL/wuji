@@ -17,36 +17,41 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import os
 import inspect
-import random
-import collections
+import logging
 
 import numpy as np
+import torch
+import torch.nn.functional as F
+
+from . import problem, loss
+from wuji.rl.pth import ac
 
 NAME = os.path.basename(os.path.dirname(os.path.dirname(__file__)))
 
 
-def fifo(rl):
-    class Buffer(collections.deque):
-        def sample(self, size):
-            return random.sample(self, size)
-
+def attr(rl):
     class RL(rl):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
-            self.buffer = Buffer(maxlen=self.config.getint(NAME, 'capacity'))
+            self.loss_critic = getattr(F, self.config.get(NAME, 'loss_critic'))
+            self.weight_loss = torch.FloatTensor(np.array([self.config.getfloat(NAME + '_weight_loss', key) for key in ac.Losses._fields]))
     return RL
 
 
-def diverse(rl):
-    from ..buffer import Diverse as Buffer
+def gae(rl):
+    from .. import gae
     name = inspect.getframeinfo(inspect.currentframe()).function
 
     class RL(rl):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
-            choose = self.config.getint('_'.join([NAME, name]), 'choose')
-            space = np.insert(self.problem.context['state_space'], -1, [0, self.problem.context['encoding']['blob']['init'][self.kind]['kwargs']['outputs'] - 1], axis=0)
-            lower, upper = np.moveaxis(space, -1, 0)
-            range = upper - lower + np.finfo(space.dtype).eps
-            self.buffer = Buffer(self.config.getint(NAME, 'capacity'), choose, lower, range)
+            assert not hasattr(self, name)
+            setattr(self, name, self.config.getfloat(NAME, name))
+            if getattr(self, name) <= 0:
+                self.value = super().value
+                logging.warning(f'{name.upper()} disabled')
+
+        def value(self, **kwargs):
+            _baseline = torch.cat([kwargs['baseline'], kwargs['terminal'].view(-1)])
+            return gae(kwargs['reward'], kwargs['discount'], _baseline, getattr(self, name))
     return RL

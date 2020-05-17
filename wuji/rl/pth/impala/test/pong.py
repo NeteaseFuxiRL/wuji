@@ -22,13 +22,14 @@ import itertools
 import configparser
 import contextlib
 import hashlib
+import operator
 
 import numpy as np
 import torch
+import ray
 
 import wuji.problem
-from .. import RL
-from ... import pg
+from .. import RL, wrap
 
 PREFIX = os.path.splitext(__file__)[0]
 NAME = __file__.split(os.sep)[-3]
@@ -55,20 +56,31 @@ def check_text(name, value, ext='.tsv'):
 def test():
     config = configparser.ConfigParser()
     config.read(PREFIX + '.ini')
+    ray.init(**wuji.ray.init(config))
     wuji.random.seed(0)
-    rl = functools.reduce(lambda x, wrap: wrap(x), itertools.chain((RL,), map(wuji.parse.instance, filter(None, config.get('rl', 'wrap').split('\t') + config.get('dqn', 'wrap').split('\t')))))
-    rl = pg.wrap.hook.rollout(rl)
+    rl = functools.reduce(lambda x, wrap: wrap(x), itertools.chain((RL,), map(wuji.parse.instance, filter(None, config.get('rl', 'wrap').split('\t') + config.get(NAME, 'wrap').split('\t')))))
+    rl = wrap.hook.make_tensors(rl)
     with contextlib.closing(rl(config)) as rl:
-        rl.problem.seed(0)
+        ray.get([actor.seed.remote(0) for actor in rl.actor])
         check_text('model', '\n'.join(['\t'.join([key, hashlib.md5(value.numpy().tostring()).hexdigest()]) for key, value in rl.get_blob().items()]))
         outcome = rl()
-        (trajectory,), (result,) = zip(*rl.hook_rollout)
+        inputs, _p, action, reward, terminal = zip(*[attr.inputs for attr in rl.hook_make_tensors])
+        state = torch.cat(list(map(operator.itemgetter(0), inputs)))
+        _p, reward = map(torch.cat, (_p, reward))
+        terminal = torch.stack(terminal)
+        logits, prob, baseline, action, rho, value = map(torch.cat, zip(*[attr.outputs for attr in rl.hook_make_tensors]))
         # trajectory
-        check_text(os.path.join('trajectory', 'state'), '\n'.join([hashlib.md5(exp['inputs'][0].detach().numpy().tostring()).hexdigest() for exp in trajectory]))
-        check_text(os.path.join('trajectory', 'action'), '\n'.join([str(exp['action'].item()) for exp in trajectory]))
-        check_text(os.path.join('trajectory', 'reward'), '\n'.join([str(exp['reward'].item()) for exp in trajectory]))
-        # tensors
-        q_label = rl.get_q_label(trajectory)
-        check_text(os.path.join('tensors', 'q_label'), array2tsv(q_label.numpy()))
+        check_text('state', '\n'.join([hashlib.md5(s.numpy().tostring()).hexdigest() for s in state]))
+        check_text('logits', array2tsv(logits.detach().numpy()))
+        check_text('prob', array2tsv(prob.detach().numpy()))
+        check_text('baseline', array2tsv(baseline.detach().numpy()))
+        check_text('action', array2tsv(action.detach().numpy()))
+        check_text('reward', array2tsv(reward.detach().numpy()))
+        check_text('terminal', array2tsv(terminal.detach().numpy()))
+        check_text('_p', array2tsv(_p.detach().numpy()))
+        check_text('rho', array2tsv(rho.detach().numpy()))
+        check_text('value', array2tsv(value.detach().numpy()))
         # loss
+        for key, value in outcome.losses._asdict().items():
+            check_text(os.path.join('loss', key), str(value.item()))
         check_text('loss', str(outcome.loss.item()))

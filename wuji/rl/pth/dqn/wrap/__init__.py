@@ -20,12 +20,23 @@ import functools
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 
 import wuji
-from . import buffer
+from . import problem, buffer
 from wuji.problem.mdp import Truncator
 
 NAME = os.path.basename(os.path.dirname(os.path.dirname(__file__)))
+
+
+def attr(rl):
+    class RL(rl):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.batch_size = self.config.getint('train', 'batch_size')
+            self.discount = self.config.getfloat('rl', 'discount')
+            self._loss = getattr(F, self.config.get(NAME, 'loss'))
+    return RL
 
 
 def truncation(step=None):
@@ -33,7 +44,7 @@ def truncation(step=None):
         class RL(rl):
             def __init__(self, *args, **kwargs):
                 super().__init__(*args, **kwargs)
-                self.truncator = Truncator(self.problem, self.kind, self.get_agent, lambda: {}, self.batch_size if step is None else step)
+                self.truncator = Truncator(self.problem, self.kind, self.get_agent, self.get_opponent_train_agent, self.batch_size if step is None else step)
 
             def evaluate(self):
                 while not self.truncator.done:
@@ -74,15 +85,15 @@ def double(rl):
             super().set_blob(blob)
             self.model_.set_blob(blob)
 
-        def value(self, trajectory):
+        def get_q_label(self, trajectory):
             reward = torch.FloatTensor(np.array([exp['reward'] for exp in trajectory]))
             discount = torch.FloatTensor(np.array([0 if exp['done'] else self.discount for exp in trajectory]))
             inputs_ = [exp['inputs_'] for exp in trajectory]
             inputs_ = tuple(map(lambda t: torch.cat(t), zip(*inputs_)))
             with torch.no_grad():
                 q_ = self.model_(*inputs_)
-                value_, _ = q_.max(1)
-            return reward + discount * value_
+                q_max_, _ = q_.max(1)
+            return reward + discount * q_max_
 
         def __call__(self):
             try:

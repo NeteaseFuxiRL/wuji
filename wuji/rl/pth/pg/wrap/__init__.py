@@ -15,22 +15,29 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
-from wuji.rl.pth import wrap as wrap_rl, pg
-from .. import Evaluator as _Evaluator, wrap as _wrap
+import os
+
+import numpy as np
+
+from . import problem, hook
+
+NAME = os.path.basename(os.path.dirname(os.path.dirname(__file__)))
 
 
-@wrap_rl.model
-@wrap_rl.problem
-@_wrap.evaluate
-class Evaluator(_Evaluator):
-    @staticmethod
-    def ray_resources(config):
-        return dict(num_cpus=1)
+def attr(rl):
+    class RL(rl):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.discount = self.config.getfloat('rl', 'discount')
+            self.norm = eval('lambda reward: ' + self.config.get(NAME, 'norm'))
+    return RL
 
-    def __init__(self, config, **kwargs):
-        self.config = config
-        self.kwargs = kwargs
 
-    def update_context(self, context):
-        context['encoding']['blob']['module'] = self.config.get('model', 'module').split() + self.config.get('model', 'init').split()
-        context['encoding']['blob']['agent'] = dict(eval=['.'.join([pg.agent.__name__, 'Eval'])])
+def agent(rl):
+    class RL(rl):
+        def set_prob_min(self, prob_min):
+            return self.agent.set_prob_min(prob_min)
+
+        def get_prob_min(self):
+            return self.agent.prob_min
+    return RL

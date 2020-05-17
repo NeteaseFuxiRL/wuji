@@ -32,6 +32,7 @@ from torchvision.transforms.functional import to_tensor
 import ray
 
 import wuji.problem.mdp
+from . import opponent
 
 
 def remote_actor(actor, *args, **kwargs):
@@ -62,6 +63,18 @@ def remote_actor(actor, *args, **kwargs):
     return Actor
 
 
+def checkpoint(rl):
+    class RL(rl):
+        def __getstate__(self):
+            return dict(context=self.get_context(), decision=dict(blob=self.get_blob()))
+
+        def __setstate__(self, state):
+            decision = state.pop('decision')
+            self.set_blob(decision['blob'])
+            state.pop('context', None)
+    return RL
+
+
 def problem(rl):
     class RL(rl):
         def __init__(self, config, *args, **kwargs):
@@ -69,7 +82,6 @@ def problem(rl):
             self.config = config
             self.problem = wuji.problem.seed(wuji.problem.create(config), **kwargs)
             self.context = self.problem.context
-            self.update_context(self.context)
             self.transform = lambda x: to_tensor(x) if len(x.shape) > 2 else torch.FloatTensor(x)
             super().__init__(config, *args, **kwargs)
 
@@ -78,9 +90,6 @@ def problem(rl):
                 return super().close()
             finally:
                 self.problem.close()
-
-        def __len__(self):
-            return 1
 
         def get_context(self):
             return self.context
@@ -217,6 +226,8 @@ def optimizer(rl):
 
 
 def evaluate(rl):
+    from wuji.rl.pth.wrap.opponent import make_agents
+
     class RL(rl):
         def evaluate(self):
             with torch.no_grad():
@@ -226,11 +237,16 @@ def evaluate(rl):
                     cost = 0
                     results = []
                     sample = self.config.getint('sample', 'eval')
-                    for seed in range(sample):
+                    opponents = self.get_opponents_eval()
+                    if sample < len(opponents):
+                        warnings.warn(f'sample={sample} is lesser than the number of opponents ({len(opponents)})')
+                    for seed, opponent in zip(range(sample), itertools.cycle(opponents)):
+                        opponent = make_agents(self.config, self.context['encoding']['blob'], opponent)
                         with contextlib.closing(self.problem.evaluating(seed)):
-                            controllers, ticks = self.problem.reset(self.kind)
+                            controllers, ticks = self.problem.reset(self.kind, *opponent)
                             costs = asyncio.get_event_loop().run_until_complete(asyncio.gather(
                                 wuji.problem.mdp._rollout(controllers[0], agent),
+                                *[wuji.problem.mdp._rollout(controller, agent) for controller, agent in zip(controllers[1:], opponent.values())],
                                 *map(wuji.problem.mdp.ticking, ticks),
                             ))[:len(controllers)]
                         cost += max(costs)
@@ -239,14 +255,16 @@ def evaluate(rl):
                 finally:
                     self.model.train()
 
-        def evaluate_map(self, seed):
+        def evaluate_map(self, seed, opponent):
             with torch.no_grad(), contextlib.closing(self.problem.evaluating(seed)):
                 try:
                     self.model.eval()
                     agent = functools.reduce(lambda x, wrap: wrap(x), map(wuji.parse.instance, self.context['encoding']['blob']['agent']['eval']))(self.model)
-                    controllers, ticks = self.problem.reset(self.kind)
+                    opponent = make_agents(self.config, self.context['encoding']['blob'], opponent)
+                    controllers, ticks = self.problem.reset(self.kind, *opponent)
                     costs = asyncio.get_event_loop().run_until_complete(asyncio.gather(
                         wuji.problem.mdp._rollout(controllers[0], agent),
+                        *[wuji.problem.mdp._rollout(controller, agent) for controller, agent in zip(controllers[1:], opponent.values())],
                         *map(wuji.problem.mdp.ticking, ticks),
                     ))[:len(controllers)]
                     result = controllers[0].get_result()
