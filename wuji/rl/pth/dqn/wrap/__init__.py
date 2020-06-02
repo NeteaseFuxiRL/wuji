@@ -70,6 +70,14 @@ def rollout(*keys):
     return decorate
 
 
+def reset_buffer(rl):
+    class RL(rl):
+        def set_blob(self, *args, **kwargs):
+            self.buffer.clear()
+            return super().set_blob(*args, **kwargs)
+    return RL
+
+
 def double(rl):
     class RL(rl):
         def __init__(self, config, **kwargs):

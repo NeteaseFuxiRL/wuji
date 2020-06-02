@@ -28,6 +28,7 @@ NAME = os.path.basename(os.path.dirname(__file__))
 Outcome = recordtype.recordtype('Outcome', ['cost', 'loss', 'result'])
 
 
+@wrap.reset_buffer
 @wrap.truncation()
 @_wrap.checkpoint
 @_wrap.opponent.eval
