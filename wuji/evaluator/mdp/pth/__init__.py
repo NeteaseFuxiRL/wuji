@@ -15,7 +15,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 
-from wuji.rl.pth import wrap as wrap_rl, pg
+from wuji.rl.pth import wrap as wrap_rl
 from .. import Evaluator as _Evaluator, wrap as _wrap
 
 
