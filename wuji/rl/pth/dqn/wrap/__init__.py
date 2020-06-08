@@ -100,8 +100,8 @@ def double(rl):
             inputs_ = tuple(map(lambda t: torch.cat(t), zip(*inputs_)))
             with torch.no_grad():
                 q_ = self.model_(*inputs_)
-                q_max_, _ = q_.max(1)
-            return reward + discount * q_max_
+                _, action = self.model(*inputs_).max(1)
+            return reward + discount * q_.gather(-1, action.view(-1, 1)).view(-1)
 
         def __call__(self):
             try:
