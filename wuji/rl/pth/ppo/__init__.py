@@ -116,8 +116,9 @@ class RL(object):
     def make_tensors(self, inputs, action, value, advantage, _p):
         logits, baseline = self.model(*inputs)
         prob, baseline = self.agent.prob(logits), baseline.view(-1)
-        p = prob.gather(-1, action.view(-1, 1)).view(-1)
-        ratio = p / _p.clamp(min=np.finfo(np.float32).eps)
+        with torch.no_grad():
+            p = prob.gather(-1, action.view(-1, 1)).view(-1)
+            ratio = p / _p.clamp(min=np.finfo(np.float32).eps)
         return prob, baseline, value, advantage, ratio
 
     def get_losses(self, prob, baseline, value, advantage, ratio):
